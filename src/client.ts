@@ -18,8 +18,26 @@ export interface InterfazeOptions extends ClientOptions {
   adminKey?: string;
 }
 
+function envVar(name: string): string | undefined {
+  return typeof process !== "undefined" && process.env ? process.env[name] : undefined;
+}
+
+/**
+ * The openai client merges `OPENAI_CUSTOM_HEADERS` into every request. Those headers
+ * are for api.openai.com (or a gateway in front of it), so null them out here; a
+ * null default header tells the openai client to drop it.
+ */
+function openaiEnvHeaders(): Record<string, null> {
+  const out: Record<string, null> = {};
+  for (const line of envVar("OPENAI_CUSTOM_HEADERS")?.split("\n") ?? []) {
+    const colon = line.indexOf(":");
+    if (colon > 0) out[line.slice(0, colon).trim()] = null;
+  }
+  return out;
+}
+
 function envKey(): string | undefined {
-  return typeof process !== "undefined" && process.env ? process.env["INTERFAZE_API_KEY"] : undefined;
+  return envVar("INTERFAZE_API_KEY");
 }
 
 /** Interfaze API client — an OpenAI-compatible client wired to the Interfaze endpoint. */
@@ -37,7 +55,7 @@ export class Interfaze {
       throw new InterfazeError("Missing API key. Pass `new Interfaze({ apiKey })` or set the INTERFAZE_API_KEY environment variable.");
     }
 
-    const headers: Record<string, string> = { ...(defaultHeaders as Record<string, string> | undefined) };
+    const headers = { ...openaiEnvHeaders(), ...(defaultHeaders as Record<string, string> | undefined) } as Record<string, string | null>;
     if (showAdditionalInfo) headers[HEADERS.showAdditionalInfo] = "true";
     if (bypassMoA) headers[HEADERS.bypassMoA] = "true";
     if (bypassCache) headers[HEADERS.bypassCache] = "true";
@@ -47,6 +65,10 @@ export class Interfaze {
       ...rest,
       apiKey: resolvedKey,
       baseURL: baseURL ?? INTERFAZE_BASE_URL,
+      // Left undefined, these fall back to OPENAI_ORG_ID / OPENAI_PROJECT_ID and get
+      // sent to Interfaze as OpenAI-Organization / OpenAI-Project headers.
+      organization: rest.organization ?? null,
+      project: rest.project ?? null,
       defaultHeaders: headers,
       timeout: rest.timeout ?? DEFAULT_TIMEOUT_MS,
     });
