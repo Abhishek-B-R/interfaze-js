@@ -36,6 +36,21 @@ function openaiEnvHeaders(): Record<string, null> {
   return out;
 }
 
+/**
+ * `defaultHeaders` is openai's `HeadersLike`, so it may be a `Headers` instance or an
+ * array of tuples. Spreading either gives `{}` or `{"0": [name, value]}`, which silently
+ * drops every header the caller set.
+ */
+function headerRecord(given: ClientOptions["defaultHeaders"]): Record<string, unknown> {
+  if (!given) return {};
+  if ((typeof Headers !== "undefined" && given instanceof Headers) || Array.isArray(given)) {
+    const out: Record<string, string> = {};
+    new Headers(given as HeadersInit).forEach((value, name) => (out[name] = value));
+    return out;
+  }
+  return { ...given };
+}
+
 function envKey(): string | undefined {
   return envVar("INTERFAZE_API_KEY");
 }
@@ -55,7 +70,7 @@ export class Interfaze {
       throw new InterfazeError("Missing API key. Pass `new Interfaze({ apiKey })` or set the INTERFAZE_API_KEY environment variable.");
     }
 
-    const headers = { ...openaiEnvHeaders(), ...(defaultHeaders as Record<string, string> | undefined) } as Record<string, string | null>;
+    const headers = { ...openaiEnvHeaders(), ...headerRecord(defaultHeaders) } as Record<string, string | null>;
     if (showAdditionalInfo) headers[HEADERS.showAdditionalInfo] = "true";
     if (bypassMoA) headers[HEADERS.bypassMoA] = "true";
     if (bypassCache) headers[HEADERS.bypassCache] = "true";
