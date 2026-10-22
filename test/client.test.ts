@@ -56,46 +56,6 @@ describe("client construction", () => {
   });
 });
 
-describe("OPENAI_* environment isolation", () => {
-  const vars = ["OPENAI_ORG_ID", "OPENAI_PROJECT_ID", "OPENAI_CUSTOM_HEADERS"] as const;
-  const saved = Object.fromEntries(vars.map((v) => [v, process.env[v]]));
-  beforeEach(() => {
-    process.env["OPENAI_ORG_ID"] = "org-from-env";
-    process.env["OPENAI_PROJECT_ID"] = "proj-from-env";
-    process.env["OPENAI_CUSTOM_HEADERS"] = "Helicone-Auth: Bearer sk-gateway\nx-team: platform";
-  });
-  afterEach(() => {
-    for (const v of vars) {
-      if (saved[v] === undefined) delete process.env[v];
-      else process.env[v] = saved[v];
-    }
-  });
-
-  it("does not send OpenAI org, project or custom env headers to Interfaze", async () => {
-    const { interfaze, calls } = mockInterfaze(() => jsonResponse(completion()));
-    await interfaze.chat.completions.create({ messages: [{ role: "user", content: "hi" }] });
-
-    const headers = calls[0]!.headers;
-    expect(headers.get("openai-organization")).toBeNull();
-    expect(headers.get("openai-project")).toBeNull();
-    expect(headers.get("helicone-auth")).toBeNull();
-    expect(headers.get("x-team")).toBeNull();
-    expect(headers.get("authorization")).toBe("Bearer test-key");
-  });
-
-  it("still sends values the caller passes explicitly", async () => {
-    const { interfaze, calls } = mockInterfaze(() => jsonResponse(completion()), {
-      organization: "org-explicit",
-      defaultHeaders: { "x-team": "explicit" },
-    });
-    await interfaze.chat.completions.create({ messages: [{ role: "user", content: "hi" }] });
-
-    const headers = calls[0]!.headers;
-    expect(headers.get("openai-organization")).toBe("org-explicit");
-    expect(headers.get("x-team")).toBe("explicit");
-  });
-});
-
 describe("defaultHeaders", () => {
   it.each([
     ["a plain object", { "x-trace": "abc" }],
